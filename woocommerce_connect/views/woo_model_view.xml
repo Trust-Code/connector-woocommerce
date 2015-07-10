@@ -27,6 +27,7 @@
                                             colspan="2"/>                                        
                                         <field name="api_key" colspan="2"/>
                                         <field name="secret_api_key" password="1" colspan="2"/>
+                                        <field name="default_lang_id" widget="selection"/>
                                     </group>
                                 </page>                               
                             </notebook>

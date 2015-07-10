@@ -21,7 +21,7 @@
 
 import openerp.addons.connector.backend as backend
 
-woo = backend.Backend('WooCommerce')
-woo23 = backend.Backend(parent=woo, version='2.3.11')
+woo = backend.Backend('woo')
+woo2311 = backend.Backend(parent=woo, version='2.3.11')
 
 
