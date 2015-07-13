@@ -21,7 +21,7 @@
 
 from datetime import datetime, timedelta
 from openerp import models, fields, api, _
-from woocommerce_connect.models.Partner import partner_import_batch
+from openerp.addons.woocommerce_connect.models.Partner import partner_import_batch
 from openerp.addons.connector.session import ConnectorSession
 
 IMPORT_DELTA_BUFFER = 30

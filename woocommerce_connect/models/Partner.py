@@ -5,9 +5,9 @@ Created on Jun 19, 2015
 @author: danimar
 '''
 from openerp import models, fields, api
-from woocommerce_connect.service.WooCommerceClient import WooCommerceClient
-from woocommerce_connect.connector import get_environment
-from woocommerce_connect.backend import woo
+from openerp.addons.woocommerce_connect.service.WooCommerceClient import WooCommerceClient
+from openerp.addons.woocommerce_connect.connector import get_environment
+from openerp.addons.woocommerce_connect.backend import woo
 from openerp.addons.connector.queue.job import job
 from openerp.addons.connector.unit.backend_adapter import CRUDAdapter
 from openerp.addons.connector.unit.synchronizer import Importer
@@ -15,6 +15,7 @@ from openerp.addons.connector.unit.mapper import (mapping,
                                                   only_create,
                                                   ImportMapper
                                                   )
+from openerp.addons.woocommerce_connect.unit.import_synchronizer import DelayedBatchImporter
 
 
 
@@ -81,7 +82,11 @@ class PartnerAdapter(CRUDAdapter):
     def search_read(self, filters=None):
         """ Search records according to some criterias
         and returns their information"""        
-        return self._call('%s.search_read' % self._woo_model, values)
+        wc_client = WooCommerceClient('ck_fe73839ab261252147281b1d9efcb21c', 
+                                  'cs_d71f2aad86529267ace5817adc83d438', 
+                                  'http://127.0.0.1:8080/wordpress')
+        customers = wc_client.get_customers()        
+        return customers['customers']
 
     def write(self, id, data):
         """ Update records on the external system """        
@@ -92,24 +97,26 @@ class PartnerAdapter(CRUDAdapter):
         return self._call('%s.delete' % self._woo_model, values)
 
 
-
-
 @woo
-class PartnerBatchWooImporter(Importer):
+class PartnerBatchWooImporter(DelayedBatchImporter):
     """ Synchronize the WooCommerce Partners.
     """
     _model_name = ['woo.res.partner']
+   
 
     def run(self, filters=None):
         """ Run the synchronization """
-        print "Sincronização vai iniciar"
         
-        wc_client = WooCommerceClient('ck_5e5692af317c09ca4581be6bc5596714', 
-                                  'cs_3115cf0868e4ae29117257e13cec6248', 
-                                  'http://127.0.0.1:8080/wordpress')
-        customers = wc_client.get_customers()
+        customers = self.backend_adapter.search_read()
+        
         for customer in customers:
-            print str(customer)
+            
+            map_partner = self.mapper.map_record(self.magento_record)
+            partner_values = map_partner.values()
+            
+            self.env['woo.res.partner'].create(partner_values)
+            #self._import_record(customer.id) #Later we make the delay
+            print str(customer.first_name)
 
 
 
@@ -119,10 +126,6 @@ class PartnerImportMapper(ImportMapper):
 
     direct = [
         ('email', 'email'),
-        ('dob', 'birthday'),
-        ('email', 'emailid'),
-        ('taxvat', 'taxvat'),
-        ('group_id', 'group_id'),
     ]
 
     @only_create
@@ -135,50 +138,9 @@ class PartnerImportMapper(ImportMapper):
     @mapping
     def names(self, record):
         # TODO create a glue module for base_surname
-        parts = [part for part in (record['firstname'],
-                                   record['middlename'],
-                                   record['lastname']) if part]
+        parts = [part for part in (record['first_name'],                                   
+                                   record['last_name']) if part]
         return {'name': ' '.join(parts)}
-
-    @mapping
-    def customer_group_id(self, record):
-        # import customer groups
-        binder = self.binder_for(model='magento.res.partner.category')
-        category_id = binder.to_openerp(record['group_id'], unwrap=True)
-
-        if category_id is None:
-            raise MappingError("The partner category with "
-                               "magento id %s does not exist" %
-                               record['group_id'])
-
-        # FIXME: should remove the previous tag (all the other tags from
-        # the same backend)
-        return {'category_id': [(4, category_id)]}
-
-    @mapping
-    def website_id(self, record):
-        binder = self.binder_for(model='magento.website')
-        website_id = binder.to_openerp(record['website_id'])
-        return {'website_id': website_id}
-
-    @only_create
-    @mapping
-    def company_id(self, record):
-        binder = self.binder_for(model='magento.storeview')
-        storeview = binder.to_openerp(record['store_id'], browse=True)
-        if storeview:
-            company = storeview.backend_id.company_id
-            if company:
-                return {'company_id': company.id}
-        return {'company_id': False}
-
-    @mapping
-    def lang(self, record):
-        binder = self.binder_for(model='magento.storeview')
-        storeview = binder.to_openerp(record['store_id'], browse=True)
-        if storeview:
-            if storeview.lang_id:
-                return {'lang': storeview.lang_id.code}
 
     @only_create
     @mapping
